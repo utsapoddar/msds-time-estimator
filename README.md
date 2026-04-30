@@ -29,6 +29,8 @@ What those commands do:
 
 If you prefer the notebook flow instead, open `time_estimator.ipynb` after install and run the profile/prediction cells there.
 
+If you are not technical, start with the [nontechnical guide](NONTECHNICAL_GUIDE.md).
+
 ## How it works (short)
 
 The model anchors on hours, not just calendar days: your anchor-course days and hours/week are converted into study hours, then compared against each course's posterior mean hours to estimate your pace. Course posteriors are updated from student review data with a tempered effective weight of `min(N, 5)` so high-review courses tighten confidence without completely drowning the prior. For courses that still do not have student review rows, the intake step can fall back to Coursera-published hours from the same MSDS review sheet. Course predictions transfer anchor pace by topic similarity, and degree-total uncertainty uses the same course-topic matrix for CLT correlations. See [MODEL.md](MODEL.md) for the full derivation and implementation details.
