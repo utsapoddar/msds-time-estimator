@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.codex/
+.ipynb_checkpoints/
+*.log
+.env
+data_sources/
+MSDS_AI_TIMELINE.md

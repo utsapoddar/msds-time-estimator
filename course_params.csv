@@ -1,0 +1,37 @@
+course_id,name,specialization,expected_hours,expected_days,source,difficulty,review_count
+DTSA5001,Probability Foundations for Data Science and AI,Statistical Inference,40.4,56.6,guide_difficulty_weighted_ols,3.93,14.0
+DTSA5002,Statistical Estimation for Data Science and AI,Statistical Inference,52.4,73.4,guide_difficulty_weighted_ols,4.88,8.0
+DTSA5003,Statistical Inference and Hypothesis Testing,Statistical Inference,36.2,50.7,guide_difficulty_weighted_ols,3.6,5.0
+DTSA5501,Algorithms for Searching Sorting and Indexing,Data Structures & Algorithms,22.9,32.1,generic_program_median,,
+DTSA5502,Trees and Graphs: Basics,Data Structures & Algorithms,22.9,32.1,generic_program_median,,
+DTSA5503,Dynamic Programming Greedy Algorithms,Data Structures & Algorithms,22.9,32.1,generic_program_median,,
+DTSA5011,Modern Regression Analysis in R,Statistical Modeling,20.1,28.1,guide_difficulty_weighted_ols,2.33,3.0
+DTSA5012,ANOVA and Experimental Design,Statistical Modeling,15.9,22.3,guide_difficulty_weighted_ols,2.0,1.0
+DTSA5013,Generalized Linear Models and Nonparametric Regression,Statistical Modeling,15.9,22.3,guide_difficulty_weighted_ols,2.0,1.0
+DTSA5504,Data Mining Pipeline,Data Mining,13.6,19.0,guide_difficulty_weighted_ols,1.82,11.0
+DTSA5505,Data Mining Methods,Data Mining,21.4,30.0,guide_difficulty_weighted_ols,2.43,7.0
+DTSA5506,Data Mining Project,Data Mining,30.7,43.0,guide_difficulty_weighted_ols,3.17,6.0
+DTSA5509,Introduction to Machine Learning: Supervised Learning,Machine Learning,43.1,60.3,guide_difficulty_weighted_ols,4.14,21.0
+DTSA5510,Introduction to Machine Learning: Unsupervised Learning,Machine Learning,47.6,66.6,guide_difficulty_weighted_ols,4.5,14.0
+DTSA5511,Introduction to Deep Learning,Machine Learning,52.5,73.5,guide_difficulty_weighted_ols,4.89,9.0
+DTSA5733,Relational Database Design,Databases,15.9,22.3,guide_difficulty_weighted_ols,2.0,3.0
+DTSA5734,The Structured Query Language (SQL),Databases,13.4,18.8,guide_difficulty_weighted_ols,1.8,5.0
+DTSA5735,Advanced Topics and Future Trends in Database Technologies,Databases,15.9,22.3,guide_difficulty_weighted_ols,2.0,3.0
+DTSA5301,Data Science as a Field,Vital Skills,7.5,10.5,guide_difficulty_weighted_ols,1.33,3.0
+DTSA5302,Cybersecurity for Data Science,Vital Skills,22.9,32.1,generic_program_median,,
+DTSA5303,Ethical Issues in Data Science,Vital Skills,22.9,32.1,generic_program_median,,
+DTSA5304,Fundamentals of Data Visualization,Vital Skills,22.9,32.1,generic_program_median,,
+DTSA5020,Regression and Classification,Statistical Learning,22.0,30.8,msds_reviews,2.666667,3.0
+DTSA5021,"Resampling, Selection, and Splines",Statistical Learning,24.0,33.6,msds_reviews,4.5,2.0
+DTSA5022,"Trees, SVM, and Unsupervised Learning",Statistical Learning,13.75,19.2,msds_reviews,2.25,4.0
+DTSA5701,Introduction to High Performance Computing,High Performance Computing,10.666667,14.9,msds_reviews,1.333333,3.0
+DTSA5702,Efficient Programming,High Performance Computing,7.0,9.8,msds_reviews,3.0,1.0
+DTSA5703,Parallel Computing with MPI,High Performance Computing,7.0,9.8,msds_reviews,3.0,1.0
+DTSA5704,"Managing, Describing, and Analyzing Data",Quality Improvement,18.0,25.2,coursera_published,,
+DTSA5705,Stability and Capability in Quality Improvement,Quality Improvement,9.0,12.6,coursera_published,,
+DTSA5706,Measurement Systems Analysis,Quality Improvement,17.0,23.8,coursera_published,,
+DTSA5798,Supervised Text Classification for Marketing Analytics,Text Marketing Analytics,12.0,16.8,coursera_published,,
+DTSA5799,Unsupervised Text Classification for Marketing Analytics,Text Marketing Analytics,13.0,18.2,coursera_published,,
+DTSA5800,Network Analysis for Marketing Analytics,Text Marketing Analytics,10.0,14.0,coursera_published,,
+DTSA5842,"Effective Communication: Writing, Design and Presentation",Communication,63.0,88.2,coursera_published,,
+DTSA5843,Effective Communication Capstone Project,Communication,13.0,18.2,coursera_published,,
