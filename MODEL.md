@@ -1,37 +1,47 @@
 # How the current model works
 
-This file describes the code as it exists now in `modules/`.
+This file describes the current code in `modules/`.
 
 ## Data sources
 
-### 1. Course priors (`course_params.csv`)
-Ryan and the synthetic rows are no longer part of the model.
+### Course priors (`course_params.csv`)
 
-`course_params.csv` now carries weakly-informative prior means in **hours**:
+`course_params.csv` carries weakly informative prior means in hours:
 
-- if a course has guide difficulty, use the workbook-derived weighted fit
+- courses with guide difficulty use the weighted difficulty fit
   - `expected_hours = 12.671203533443347 * difficulty - 9.417626403703878`
   - `source = guide_difficulty_weighted_ols`
-- if guide difficulty is missing, fall back to the program-median weak prior
+- courses with MSDS review aggregates but no guide-derived row use the aggregate
+  review hours directly
+  - `source = msds_reviews`
+- courses with no student-review average but published Coursera hours use those
+  hours directly
+  - `source = coursera_published`
+- courses with neither review averages nor published-hour evidence use the
+  program-median weak prior
   - `expected_hours = 22.9`
   - `source = generic_program_median`
 
-`expected_days` is only a compatibility column. It is derived from the hour prior
-using a generic baseline of **5 hours/week**:
+`expected_days` is a compatibility/display column derived from hours using a
+baseline of 5 hours/week:
 
-- `expected_days = expected_hours * 7 / 5`
+```text
+expected_days = expected_hours * 7 / 5
+```
 
-### 2. Raw observations (`data_points.csv`)
-`data_points.csv` now contains one row per usable student review with:
+### Observations (`data_points.csv`)
 
-- `source = msds_reviews` for workbook / published-sheet review rows
-- `source = google_form` for manual form submissions if those are later synced
+`data_points.csv` contains canonical usable observations with these current
+sources:
 
-Removed sources:
+- `msds_reviews` for course-level student-review aggregates from the MSDS review
+  sheet
+- `coursera_published` for fallback published-hour rows when student-review
+  hours are missing
+- `google_form` for future individual student submissions if synced later
 
-- `github_ryan`
-- `artificial`
-- `msds_reviews_xlsx`
+Each row has `weight`. For aggregate rows, this preserves review count. For
+published-hour fallback rows and individual form rows, it is normally 1.
 
 ## Intake rules (`modules/form_intake.py`)
 
@@ -41,128 +51,159 @@ Fetch order:
 
 1. `https://docs.google.com/spreadsheets/d/1lplPW_5DI-wgB_q6qgxmr9WTP12-JVV_yDXsKxLFMiM/export?format=csv&gid=158871878`
 2. `https://docs.google.com/spreadsheets/d/1lplPW_5DI-wgB_q6qgxmr9WTP12-JVV_yDXsKxLFMiM/gviz/tq?tqx=out:csv&gid=158871878`
-3. if both fail, raise `RuntimeError` instead of silently using a local workbook snapshot
+3. if both fail, raise `RuntimeError`
 
 Normalization rules:
 
 - extract `course_id` from the review row
-- keep one `data_points.csv` row per review
-- `hours` comes from the review's time-commitment field
-- `submission_id` is a stable hash, so repeated refreshes dedupe cleanly
-- existing `msds_reviews` / `msds_reviews_xlsx` rows are replaced on refresh
-
-Hours handling:
-
-- if `hours` is missing but `days` and `hours_per_week` exist, compute
-  - `hours = days * hours_per_week / 7`
-- rows still missing hours are dropped before they reach the likelihood
-- rows with non-positive hours are dropped
-- `promote_reviewed()` dedupes against existing `submission_id` values before appending to `data_points.csv`
+- convert the student time-commitment field into `hours`
+- if student hours are missing but Coursera-published hours exist, create a
+  `coursera_published` fallback row
+- keep `weight` as the review count for aggregate review rows
+- use stable hashed `submission_id` values so repeated refreshes dedupe cleanly
+- replace prior `msds_reviews`, `msds_reviews_xlsx`, and `coursera_published`
+  rows during refresh
 
 ## Posterior update (`modules/bayesian_priors.py`)
 
-The Bayesian layer works in **hours**, not calendar days.
+The posterior layer works in hours, not calendar days.
 
-For each course:
-
-- prior mean = `expected_hours` from `course_params.csv`
-- all usable rows are treated as **one observation each**
-- there is no aggregate-row weighting anymore
-
-Cleaning before PyMC:
+Cleaning before update:
 
 - keep only rows with valid `course_id`
-- compute `hours` from `days` + `hours_per_week` when possible
+- compute `hours = days * hours_per_week / 7` if only days and weekly hours are
+  available
 - drop rows still missing `hours`
-- drop non-positive `hours`
-- drop observations for course IDs that are not in `course_params.csv`
+- drop non-positive hours
+- drop observations for course IDs not present in `course_params.csv`
 
-Model:
+Tempered update:
 
-- `sigma_global ~ HalfNormal(10)`
-- `offset[i] ~ Normal(0, 1)`
-- `mu_course[i] = expected_hours[i] + offset[i] * sigma_global`
-- `sigma_student ~ HalfNormal(10)`
-- observation likelihood: `y ~ Normal(mu_course[course_idx], sigma_student)`
-- fit via `pm.find_MAP()`
+```text
+effective_n = min(weight, 5)
+posterior_mean_hours = (prior_hours + sum(hours * effective_n)) / (1 + sum(effective_n))
+posterior_sd_of_mean_hours = prior_sd / sqrt(1 + sum(effective_n))
+```
 
-Outputs added to `course_params` in memory:
+The cap keeps high-review aggregate rows influential without letting one
+aggregate completely swamp the prior.
+
+Outputs added in memory:
 
 - `posterior_mean_hours`
 - `posterior_sd_of_mean_hours`
-- compatibility day columns derived from `expected_days / expected_hours`
+- `n_obs`: count of usable rows
+- `review_weight`: sum of raw weights/review counts
+- `effective_n`: sum of tempered weights used by the update
+- compatibility day columns derived from hours
 
 ## Personalization (`modules/pipeline.py`)
 
 ### Anchor conversion
-Anchor inputs are converted to actual study hours first:
 
-- `anchor_actual_hours = anchor_days * anchor_hours_per_week / 7`
+Users enter completed courses as a vertical dictionary:
 
+```python
+anchor_days_by_course = {
+    "DTSA5001": 45,
+    "DTSA5002": 0,
+    ...
+}
+```
+
+Values less than or equal to zero are ignored. Positive values become anchors.
 For each anchor:
 
-- `S_anchor = anchor_actual_hours / posterior_mean_hours(anchor_course)`
+```text
+anchor_actual_hours = anchor_days * anchor_hours_per_week / 7
+anchor_speed = anchor_actual_hours / posterior_mean_hours(anchor_course)
+```
 
-The profile stores the mean anchor pace and then applies target-vs-anchor deltas.
+Higher speed values mean the course took longer than the current posterior mean.
+Lower values mean the student finished faster than the current posterior mean.
 
-### Learning-curve and concurrent-load deltas
+### Learning and concurrent-load deltas
 
-- `lc(n) = max(0.80, 1 - 0.02 * n)`
-- `cs(n) = 1 + 0.15 * max(0, n - 1)`
-- `learning_curve_factor = lc(courses_completed) / lc(anchor_courses_completed)`
-- `context_switch_factor = cs(concurrent_courses) / cs(anchor_concurrent_courses)`
-- `S = mean(S_anchor) * learning_curve_factor * context_switch_factor`
+The profile applies only target-vs-anchor deltas:
 
-### Skill decomposition (`modules/latent_factors.py`)
-The course loadings are still the hand-authored `(math, coding, writing)` matrix.
+```text
+lc(n) = max(0.80, 1 - 0.02 * n)
+cs(n) = 1 + 0.15 * max(0, n - 1)
+learning_curve_factor = lc(courses_completed) / lc(anchor_courses_completed)
+context_switch_factor = cs(concurrent_courses) / cs(anchor_concurrent_courses)
+adjusted_anchor_speed = anchor_speed * learning_curve_factor * context_switch_factor
+```
 
-Self-ratings map to speed multipliers with:
+This avoids double-counting the student's state at anchor time.
+
+### Skill baseline (`modules/latent_factors.py`)
+
+Self-ratings provide a broad fallback speed shape across math, coding, and
+writing:
 
 - rating `1 -> 1.3`
 - rating `10 -> 0.7`
 - clipped to `[0.7, 1.3]`
 
-Single anchor:
+This baseline matters most for courses that are not topic-similar to any
+completed anchor.
 
-- preserve the self-rating shape
-- scale that vector so the anchor constraint matches
+### Topic-based speed transfer (`modules/course_topics.py`)
 
-Multiple anchors:
+Official CU Boulder/Coursera course descriptions are hand-scored into topic
+vectors. Current axes:
 
-- solve Tikhonov-regularized least squares toward the self-rating priors
+- probability/statistics
+- statistical modeling
+- machine learning
+- NLP/text
+- data mining
+- programming/algorithms
+- databases/SQL
+- visualization/HCI
+- communication/writing
+- ethics/security/policy
+- systems/HPC
+- quality/measurement
+- project delivery
 
-Returned `skill_vec` is clipped to **`[0.25, 4.0]`**.
+For each target course:
 
-Per-course speed transfer now uses the topic matrix in `modules/course_topics.py`:
+1. compute cosine similarity to completed anchor courses
+2. weight anchor speeds by topic similarity
+3. blend topic-inferred speed with the self-rating baseline
+4. keep distant courses closer to baseline
 
-- compute a baseline speed from self-rated math/coding/writing skills
-- compare each target course to completed anchor courses by topic cosine similarity
-- blend toward the observed anchor pace when the target is topic-similar
-- keep distant courses closer to the baseline instead of assuming one anchor applies equally to every course
+Prediction output includes:
 
-The output columns include `topic_predicted_S` and `topic_anchor_similarity` for inspection.
+- `topic_predicted_S`
+- `topic_anchor_similarity`
 
-## Prediction step (`modules/pipeline.py`)
+## Prediction step
 
-The mean prediction is built in this order:
+For each course:
 
-1. `predicted_hours = posterior_mean_hours * predicted_S`
-2. convert those hours directly to target-schedule days
-   - `predicted_days = predicted_hours * 7 / target_hours_per_week`
-3. apply focus-ratio scaling
-   - `predicted_days *= 0.70 / user_focus_ratio`
+```text
+predicted_hours = posterior_mean_hours * topic_predicted_S
+predicted_days = predicted_hours * 7 / target_hours_per_week
+predicted_days *= 0.70 / user_focus_ratio
+```
 
-So `focus_ratio` now affects the **mean**, not just the variance.
+So focus ratio affects the mean calendar-day estimate, not just variance.
 
 ## Variance and intervals
 
 Base CV logic:
 
-- `cv = base_cv * adhd_variance_multiplier(1.0, has_adhd, medicated)`
-- with default `base_cv = 0.20`, this becomes
-  - `0.20` neurotypical
-  - `0.28` ADHD unmedicated
-  - `0.23` ADHD medicated
+```text
+cv = base_cv * adhd_variance_multiplier(1.0, has_adhd, medicated)
+```
+
+With default `base_cv = 0.20`:
+
+- `0.20` neurotypical
+- `0.28` ADHD unmedicated
+- `0.23` ADHD medicated
 
 Then:
 
@@ -170,23 +211,41 @@ Then:
 2. convert `sd_hours` to target-schedule days
 3. apply the same focus-ratio scale
 
-`lognormal_marginals.py` then builds the final marginal distributions:
+`lognormal_marginals.py` builds final marginal distributions:
 
 - project-heavy courses use lognormal marginals
-- the rest use truncnorm marginals at 0
+- all other courses use truncated normal marginals at 0
 
-## Degree-total correlation
+## Degree-total estimate
 
-`predict_degree_total()` uses CLT on the selected degree-plan courses. By default, the covariance matrix uses transparent course-topic similarity from `modules/course_topics.py`:
+The user selects the exact degree-plan course IDs. The helper validates:
 
-- topic axes come from official course descriptions: probability/statistics, statistical modeling, machine learning, NLP/text, data mining, programming/algorithms, databases/SQL, visualization/HCI, communication/writing, ethics/security/policy, systems/HPC, quality/measurement, and project delivery
-- pairwise similarity is cosine similarity between course topic vectors
-- correlation is mapped as `0.10 + 0.55 * similarity`, with diagonal entries fixed at 1.0
+- at least 30 courses/credits
+- no duplicate course IDs
+- no unknown course IDs
+- no more selected courses than modeled courses
 
-This is still a prior correlation model, not an empirical one. Related courses share more covariance even when they sit under different catalog labels. When same-student multi-course completion histories exist, this can be replaced or blended with empirical pairwise correlations.
+`predict_degree_total()` then uses CLT on the selected courses:
+
+```text
+total_mean = sum(course_means)
+total_variance = sum(topic_correlation_ij * sd_i * sd_j)
+total_duration ~ Normal(total_mean, sqrt(total_variance))
+```
+
+The covariance matrix uses the same course-topic cosine similarity matrix:
+
+```text
+correlation = 0.10 + 0.55 * topic_similarity
+```
+
+Diagonal entries are fixed at 1.0.
 
 ## Important current limitations
 
-- some courses still rely on Coursera-published hours rather than student-reviewed hour averages
-- the skill matrix is hand-authored; the topic matrix is hand-scored from official course descriptions
-- the model is still MAP-based, not MCMC-based
+- some courses still rely on Coursera-published hours rather than student-review
+  hour averages
+- six courses still use the generic program-median weak prior
+- the math/coding/writing skill matrix is hand-authored
+- the topic matrix is hand-scored from official descriptions
+- true empirical calibration needs same-student multi-course completion histories

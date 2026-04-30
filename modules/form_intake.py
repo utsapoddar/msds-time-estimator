@@ -137,7 +137,7 @@ def _fetch_csv_from_url(url: str) -> pd.DataFrame:
 def _load_local_workbook_reviews() -> pd.DataFrame:
     if not LOCAL_WORKBOOK_FALLBACK.exists():
         raise FileNotFoundError(
-            f"Review workbook fallback not found: {LOCAL_WORKBOOK_FALLBACK}"
+            f"Local review workbook not found: {LOCAL_WORKBOOK_FALLBACK}"
         )
     raw = pd.read_excel(
         LOCAL_WORKBOOK_FALLBACK,

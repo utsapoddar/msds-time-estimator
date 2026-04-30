@@ -78,11 +78,8 @@ def build_profile(post_params: pd.DataFrame,
     def _cs(n):  # 15% time penalty per extra concurrent course
         return 1.0 + (0.15 * max(0, n - 1))
 
-    # The pace_at_anchor_schedule already encodes the user's state at anchor time
-    # (lc/cs at anchor_courses_completed / anchor_concurrent_courses). To project to
-    # target time we apply only the DELTA: divide out anchor-time factors, multiply
-    # in target-time factors. The "factor" reported below is what the docs label
-    # learning_curve_factor / context_switch_factor — kept as ratios for honesty.
+    # Anchor pace already includes the user's state at anchor time.
+    # To project forward, apply only target-vs-anchor learning/load deltas.
     learning_curve_factor = _lc(courses_completed) / _lc(anchor_courses_completed)
     context_switch_factor = _cs(concurrent_courses) / _cs(anchor_concurrent_courses)
 
@@ -94,8 +91,8 @@ def build_profile(post_params: pd.DataFrame,
     # Per-anchor pace ratio in schedule-independent study hours.
     S_per_anchor = [h / r.posterior_mean_hours for h, r in zip(anchor_actual_hours_list, anchor_rows)]
     pace_per_anchor = S_per_anchor
-    pace_at_anchor_schedule = float(np.mean(pace_per_anchor))
-    S = pace_at_anchor_schedule * learning_curve_factor * context_switch_factor
+    anchor_pace = float(np.mean(pace_per_anchor))
+    S = anchor_pace * learning_curve_factor * context_switch_factor
 
     # Per-anchor speeds passed to decompose_speed get the same lc/cs adjustments.
     adjusted_S_per_anchor = [
@@ -116,7 +113,7 @@ def build_profile(post_params: pd.DataFrame,
         "anchor_posterior_means": [float(r.posterior_mean_hours) for r in anchor_rows],
         "pace_per_anchor": pace_per_anchor,
         "adjusted_S_per_anchor": adjusted_S_per_anchor,
-        "pace_at_anchor_schedule": pace_at_anchor_schedule, "S": S, "cv": cv, "skill_vec": skill_vec,
+        "anchor_pace": anchor_pace, "S": S, "cv": cv, "skill_vec": skill_vec,
         "skill_multipliers": skill_multipliers,
         "user_focus_ratio": user_focus_ratio, "has_adhd": has_adhd, "medicated": medicated,
         "learning_curve_factor": learning_curve_factor, "context_switch_factor": context_switch_factor,
@@ -137,7 +134,7 @@ def print_profile(profile: dict) -> None:
     ):
         print(f"  {cid} ({name}): posterior {post:.1f} h, you {hours:.1f} h ({days} d) -> pace {pace:.2f}")
     direction = "faster" if p["S"] < 1 else "slower"
-    print(f"  pace_at_anchor_schedule = {p['pace_at_anchor_schedule']:.2f}  Adjusted S = {p['S']:.2f}  ({direction} than typical by {abs(1-p['S'])*100:.0f}%)")
+    print(f"  anchor_pace = {p['anchor_pace']:.2f}  Adjusted speed = {p['S']:.2f}  ({direction} than typical by {abs(1-p['S'])*100:.0f}%)")
     print(f"  Adjustments (target vs anchor delta): learning curve "
           f"({p['anchor_courses_completed']}->{p['courses_completed']} done) = {p['learning_curve_factor']:.2f}x, "
           f"concurrent load ({p['anchor_concurrent_courses']}->{p['concurrent_courses']}) = {p['context_switch_factor']:.2f}x")
