@@ -55,7 +55,7 @@ common = dict(
     user_focus_ratio=0.70,
     has_adhd=False,
     medicated=False,
-    skill_priors=(5, 5, 5),  # math, coding, writing; 1=stronger, 10=weaker
+    skill_priors=(5, 5, 5),  # math, coding, writing; 1=weaker, 10=stronger
     anchor_hours_per_week=10.0,
     target_hours_per_week=10.0,
     anchor_concurrent_courses=1,

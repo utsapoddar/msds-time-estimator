@@ -120,7 +120,7 @@ medicated=True,
 Find:
 
 ```python
-skill_priors=(5, 5, 5),  # math, coding, writing; 1=stronger, 10=weaker
+skill_priors=(5, 5, 5),  # math, coding, writing; 1=weaker, 10=stronger
 ```
 
 The order is:
@@ -129,18 +129,18 @@ The order is:
 (math, coding, writing)
 ```
 
-Important: lower number means stronger.
+Important: higher number means stronger.
 
 Examples:
 
 ```python
-skill_priors=(3, 6, 5)
+skill_priors=(8, 4, 5)
 ```
 
 This means strong math, weaker coding, average writing.
 
 ```python
-skill_priors=(7, 4, 3)
+skill_priors=(3, 7, 8)
 ```
 
 This means weaker math, stronger coding, strong writing.
