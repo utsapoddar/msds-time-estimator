@@ -56,6 +56,22 @@ Key knobs:
 
 If you want to call the model directly, use `modules.pipeline.build_profile(...)` and `modules.pipeline.build_predictions(...)`.
 
+## Simplified model alternative
+
+For a leaner alternative to the full Bayesian/topic-transfer pipeline, use `modules.simplified_predictor`. It estimates baseline course hours from the guide difficulty weighted-OLS fit when a course has `difficulty`, falls back to `expected_hours` otherwise, multiplies by your median completed-course ratio, then converts predicted hours into calendar days from your study schedule.
+
+```python
+from modules import simplified_predictor
+
+params = simplified_predictor.load_course_params()
+prediction = simplified_predictor.predict_course_from_history(
+    "DTSA5501",
+    [{"course_id": "DTSA5001", "actual_hours": 40.0}],
+    params,
+    hours_per_week=10.0,
+)
+```
+
 If you prefer the notebook, edit the profile input cell or switch back to `pipeline.prompt_profile()` for an interactive prompt.
 
 ## Contributing
