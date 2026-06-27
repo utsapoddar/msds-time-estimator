@@ -147,6 +147,13 @@ def print_profile(profile: dict) -> None:
 
 def build_predictions(post_params: pd.DataFrame, profile: dict) -> pd.DataFrame:
     """Full per-course prediction table."""
+    pace_per_anchor = profile["pace_per_anchor"]
+    n_pace = len(pace_per_anchor)
+    if n_pace >= 2:
+        cv_pace = (np.std(pace_per_anchor, ddof=1) / np.sqrt(n_pace)) / np.mean(pace_per_anchor)
+    else:
+        cv_pace = 0.0
+
     # Baseline comes from self-ratings; topic transfer adjusts it using anchors.
     baseline_S = latent_factors.predict_per_course(post_params, profile["skill_multipliers"]).rename(
         columns={"predicted_S": "baseline_S"}
@@ -161,6 +168,7 @@ def build_predictions(post_params: pd.DataFrame, profile: dict) -> pd.DataFrame:
     merged = post_params.merge(topic_S, on="course_id")
     rows = []
     for _, r in merged.iterrows():
+        effective_n = r.effective_n if "effective_n" in merged.columns else 0.0
         predicted_hours = r.posterior_mean_hours * r.topic_predicted_S
         predicted_days = _days_from_hours(predicted_hours, profile["target_hours_per_week"])
         predicted_sd_days = _days_from_hours(
@@ -178,10 +186,17 @@ def build_predictions(post_params: pd.DataFrame, profile: dict) -> pd.DataFrame:
             "predicted_days": predicted_days,
             # sd scales with predicted_hours so the effective CV stays constant at profile['cv'].
             "sd": predicted_sd_days,
+            "cv_est": (
+                r.posterior_sd_of_mean_hours / r.posterior_mean_hours
+                if r.posterior_mean_hours > 0
+                else 0.0
+            ),
+            "df": max(1.0, 1.0 + effective_n),
         })
     # Focus ratio converts focused-hour estimates into realistic calendar days.
     predictions = pd.DataFrame(rows)
     predictions = focus_ratio.apply_focus_ratio(predictions, profile["user_focus_ratio"])
+    predictions["frac"] = np.sqrt(predictions["cv_est"] ** 2 + cv_pace ** 2 + profile["cv"] ** 2)
     predictions = lognormal_marginals.predict_intervals(predictions)
     predictions["predicted_hours"] = predictions["predicted_hours"].round(1)
     predictions["predicted_days"] = predictions["predicted_days"].round(1)
@@ -193,8 +208,8 @@ def build_predictions(post_params: pd.DataFrame, profile: dict) -> pd.DataFrame:
 def plot_course(predictions: pd.DataFrame, course_id: str, profile: dict):
     # Plot the final marginal distribution for one course after personalization.
     row = predictions.set_index("course_id").loc[course_id]
-    mu, sig = row.predicted_days, row.sd
-    dist = lognormal_marginals.get_distribution(course_id, mu, sig)
+    mu, sig = row.predicted_days, row.predicted_days * row.frac
+    dist = lognormal_marginals.get_distribution(course_id, row.predicted_days, row.frac, row.df)
     x = np.linspace(max(0, mu - 4 * sig), mu + 4 * sig, 400)
     y = dist.pdf(x)
     fig, ax = plt.subplots(figsize=(9, 4))
@@ -223,8 +238,8 @@ def prob_finish(predictions: pd.DataFrame, course_id: str, deadline_days: float,
     """Returns (P(finish by deadline), safe_buffer_days)."""
     # Convert a course distribution into a deadline probability and safe buffer.
     row = predictions.set_index("course_id").loc[course_id]
-    p = lognormal_marginals.prob_finish_by(course_id, row.predicted_days, row.sd, deadline_days)
-    dist = lognormal_marginals.get_distribution(course_id, row.predicted_days, row.sd)
+    p = lognormal_marginals.prob_finish_by(course_id, row.predicted_days, row.frac, row.df, deadline_days)
+    dist = lognormal_marginals.get_distribution(course_id, row.predicted_days, row.frac, row.df)
     
     risk_map = {"high": 0.80, "med": 0.90, "low": 0.95}
     target_p = risk_map.get(risk_tolerance, 0.90)
@@ -292,7 +307,15 @@ def predict_degree_total(
 
     n = len(pred)
     mus = pred["predicted_days"].values.astype(float)
-    sds = pred["sd"].values.astype(float)
+    if {"frac", "df"}.issubset(pred.columns):
+        dfs = pred["df"].values.astype(float)
+        scales = pred["predicted_days"].values.astype(float) * pred["frac"].values.astype(float)
+        var_multipliers = np.full_like(dfs, 3.0, dtype=float)
+        mask = dfs > 2.0
+        var_multipliers[mask] = dfs[mask] / (dfs[mask] - 2.0)
+        sds = scales * np.sqrt(var_multipliers)
+    else:
+        sds = pred["sd"].values.astype(float)
     corr = course_topics.course_correlation_matrix(
         pred["course_id"].tolist(),
         base_corr=topic_base_corr,
