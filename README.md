@@ -6,7 +6,9 @@ Bayesian time estimator for CU Boulder MSDS courses, calibrated against student 
 
 [![MSDS Time Estimator architecture diagram](docs/media/architecture.png)](docs/media/architecture.png)
 
-**[Watch the one-minute project explainer →](docs/media/explainer.mp4)**
+### Video walkthrough
+
+https://github.com/user-attachments/assets/75735f6c-86d9-459f-a2c3-b529b478a8ea
 
 ## What it does
 
