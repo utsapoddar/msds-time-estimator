@@ -2,6 +2,12 @@
 
 Bayesian time estimator for CU Boulder MSDS courses, calibrated against student reviews.
 
+## Architecture and walkthrough
+
+[![MSDS Time Estimator architecture diagram](docs/media/architecture.png)](docs/media/architecture.png)
+
+**[Watch the one-minute project explainer →](docs/media/explainer.mp4)**
+
 ## What it does
 
 - Predicts calendar days for a target course from one or more anchor courses you have already finished.
